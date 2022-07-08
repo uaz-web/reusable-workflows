@@ -1,0 +1,64 @@
+name: 'Add CWS Users to AZQS Site'
+on:
+  workflow_call:
+    inputs:
+      pantheon_site_name:
+        description: 'The Pantheon machine name of the site.'
+        required: true
+        type: string
+      pantheon_environment:
+        description: 'The Pantheon environment (dev/test/live).'
+        required: true
+        type: string
+    secrets:
+      pantheon_machine_token:
+        description: 'A Pantheon machine token.'
+        required: true
+        type: string
+      pantheon_ssh_key:
+        description: "A SSH key that's already been added in Pantheon."
+        required: true
+        type: string
+
+jobs:
+  add-cws-users:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.1'
+        
+    - name: Set up SSH
+      run: |
+        mkdir ${HOME}/.ssh && chmod 700 ${HOME}/.ssh
+        echo -e "Host *.drush.in\n    StrictHostKeyChecking no" > ${HOME}/.ssh/config
+        echo -e "${{ secrets.pantheon_ssh_key }}" > ${HOME}/.ssh/id_rsa
+        chmod 600 ${HOME}/.ssh/*
+        
+    - name: Install and authenticate Terminus
+      uses: pantheon-systems/terminus-github-actions@release/v1
+      with:
+        pantheon-machine-token: ${{ secrets.pantheon_machine_token }}
+          
+    - name: Add administrators
+      run: |
+        set -x +e
+        while IFS= read -r USER; do
+          terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:create "${USER}" </dev/null
+          terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- cas:set-cas-username "${USER}" "${USER}" </dev/null
+          terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:role:add "administrator" "${USER}" </dev/null
+        done < site-admins.txt
+        
+    - name: Add student workers
+      run: |
+        set -x +e
+        while IFS= read -r USER; do
+          terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:create ${USER} </dev/null
+          terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- cas:set-cas-username "${USER}" "${USER}" </dev/null
+          terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:role:add "az_content_editor" "${USER}" </dev/null
+          terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:role:add "az_content_admin" "${USER}" </dev/null
+        done < students.txt
