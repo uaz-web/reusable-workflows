@@ -1,4 +1,4 @@
-# reusable-workflows
+# Reusable Workflows
 
 This repo contains a library a reusable workflows for CWS tooling and support.
 
