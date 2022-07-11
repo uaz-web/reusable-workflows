@@ -32,6 +32,7 @@ jobs:
         
     - name: Set up SSH
       run: |
+        set -x
         mkdir ${HOME}/.ssh && chmod 700 ${HOME}/.ssh
         echo -e "Host *.drush.in\n    StrictHostKeyChecking no" > ${HOME}/.ssh/config
         echo -e "${{ secrets.pantheon_ssh_key }}" > ${HOME}/.ssh/id_rsa
