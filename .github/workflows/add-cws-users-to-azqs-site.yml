@@ -41,6 +41,16 @@ jobs:
       uses: pantheon-systems/terminus-github-actions@release/v1
       with:
         pantheon-machine-token: ${{ secrets.pantheon_machine_token }}
+        
+    - name: Check if site exists
+      run: |
+        set -x
+        if terminus site:info --quiet "${{ inputs.pantheon_site_name }}" ; then
+          echo "Adding CWS users"
+        else
+          "${{ inputs.pantheon_site_name }} does not exist."
+          exit 1
+        fi
           
     - name: Add administrators
       run: |
