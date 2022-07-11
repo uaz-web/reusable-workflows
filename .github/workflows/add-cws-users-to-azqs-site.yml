@@ -48,7 +48,7 @@ jobs:
         if terminus site:info --quiet "${{ inputs.pantheon_site_name }}" ; then
           echo "Adding CWS users"
         else
-          "${{ inputs.pantheon_site_name }} does not exist."
+          echo "${{ inputs.pantheon_site_name }} does not exist."
           exit 1
         fi
           
