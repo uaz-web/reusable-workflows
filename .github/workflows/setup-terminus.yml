@@ -1,32 +1,40 @@
 name: Install and setup Terminus
-on: workflow_call
-  inputs:
-    terminus-version:
-      description: A specific version of Terminus
-      default: 3.0.8
-  secrets:
-    pantheon-machine-token:
-      description: Pantheon machine token
-      required: true
-    pantheon-ssh-key:
-      description: Pantheon SSH key
-      required: true
-      
-- name: Setup PHP
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: '8.1'
-        
-- name: Set up SSH
-  run: |
-    set -x
-    mkdir ${HOME}/.ssh && chmod 700 ${HOME}/.ssh
-    echo -e "Host *.drush.in\n    StrictHostKeyChecking no" > ${HOME}/.ssh/config
-    echo -e "${{ secrets.PANTHEON_SSH_KEY }}" > ${HOME}/.ssh/id_rsa
-    chmod 600 ${HOME}/.ssh/*
+on: 
+  workflow_call:
+    inputs:
+      terminus-version:
+        type: string
+        description: A specific version of Terminus
+        default: 3.0.8
+    secrets:
+      pantheon-machine-token:
+        description: Pantheon machine token
+        required: true
+      pantheon-ssh-key:
+        description: Pantheon SSH key
+        required: true
 
-- name: Install and authenticate Terminus
-  uses: pantheon-systems/terminus-github-actions@release/v1
-  with:
-    pantheon-machine-token: ${{ secrets.PANTHEON_MACHINE_TOKEN }}
-    terminus-version: ${{ inputs.terminus-version }}
+jobs:
+  install_and_setup_terminus:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+ 
+      - name: Set up SSH key
+        run: |
+          set -x
+          mkdir ${HOME}/.ssh && chmod 700 ${HOME}/.ssh
+          echo -e "Host *.drush.in\n    StrictHostKeyChecking no" > ${HOME}/.ssh/config
+          echo -e "$PANTHEON_SSH_KEY" > ${HOME}/.ssh/id_rsa
+          chmod 600 ${HOME}/.ssh/*
+        env:
+          PANTHEON_SSH_KEY: ${{ secrets.pantheon-ssh-key }}
+
+      - name: Install and authenticate Terminus
+        uses: pantheon-systems/terminus-github-actions@release/v1
+        with:
+          pantheon-machine-token: ${{ secrets.pantheon-machine-token }}
+          terminus-version: ${{ inputs.terminus-version }}
