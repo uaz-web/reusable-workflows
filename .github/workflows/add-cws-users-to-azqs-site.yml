@@ -57,7 +57,7 @@ jobs:
       run: |
         set -x +e
         while IFS= read -r USER; do
-          terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:create "${USER}" </dev/null
+          terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:create "${USER}" --mail="${USER}"@arizona.edu </dev/null
           terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- cas:set-cas-username "${USER}" "${USER}" </dev/null
           terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:role:add "administrator" "${USER}" </dev/null
         done < site-admins.txt
@@ -66,7 +66,7 @@ jobs:
       run: |
         set -x +e
         while IFS= read -r USER; do
-          terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:create ${USER} </dev/null
+          terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:create ${USER} --mail="${USER}"@arizona.edu </dev/null
           terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- cas:set-cas-username "${USER}" "${USER}" </dev/null
           terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:role:add "az_content_editor" "${USER}" </dev/null
           terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:role:add "az_content_admin" "${USER}" </dev/null
