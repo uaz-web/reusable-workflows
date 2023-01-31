@@ -1,0 +1,21 @@
+name: 'Install PHP and Terminus'
+on: 
+  workflow_call:
+    secrets:
+      PANTHEON_MACHINE_TOKEN:
+        description: 'A Pantheon machine token.'
+        required: true
+
+jobs:
+  install-php-and-terminus:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.0'
+
+    - name: Install and Authenticate Terminus
+      uses: pantheon-systems/terminus-github-actions@release/v1
+      with:
+        pantheon-machine-token: ${{ secrets.PANTHEON_MACHINE_TOKEN }}
