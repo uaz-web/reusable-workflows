@@ -1,0 +1,47 @@
+name: Generate site list from Pantheon tags
+
+on:
+  workflow_call:
+    inputs:
+      pantheon-tags:
+        description: Pantheon tag(s) to generate a site list (comma separated list)
+        required: true
+        type: string
+jobs:
+  generate-site-list:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Set up Terminus
+      uses: pantheon-systems/terminus-github-actions@release/v1
+      with:
+        pantheon-machine-token: ${{ secrets.CWS_PANTHEON_ADMIN_TOKEN }}
+
+    - name: Delete sites.txt if exists
+      run: |
+        if [ -f sites.txt ]; then
+          rm sites.txt
+        fi
+
+    - name: Generate site list
+      run: |
+        IFS=',' read -a array <<< "${{ inputs.pantheon-tags }}"
+        for TAG in "${array[@]}"
+        do
+          terminus org:site:list --field=Name --tag "$TAG" 76681b9d-620b-49c7-998f-b34a2829d8ab >> sites.txt
+        done
+
+    - name: Set output
+      id: output
+      run: echo "::set-output name=site-list-path::sites.txt"
+
+    - name: Upload site list as artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: site-list
+        path: sites.txt
+
+    - name: Print list of websites
+      run: cat sites.txt
