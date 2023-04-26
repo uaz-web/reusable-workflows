@@ -14,9 +14,6 @@ on:
       pantheon_machine_token:
         description: 'A Pantheon machine token.'
         required: true
-      pantheon_ssh_key:
-        description: "A SSH key that's already been added in Pantheon."
-        required: true
 
 jobs:
   add-cws-users:
