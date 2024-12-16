@@ -1,0 +1,188 @@
+name: 'Reusable Create Site'
+
+on:
+  workflow_call:
+    inputs:
+      paid_site:
+        description: "Is the site a paid site?"
+        required: true
+        type: boolean
+      pantheon_site_name:
+        description: "The Pantheon site machine-readable name."
+        required: true
+        type: string
+      drupal_site_name:
+        description: "The display name of the new Drupal site."
+        required: true
+        type: string
+      starter_content:
+        description: "Include starter content? (Default: true)"
+        required: true
+        default: true
+        type: boolean
+      cws_users:
+        description: "Add CWS Users to the site? (Default: true)"
+        required: true
+        default: true
+        type: boolean
+      site_owners:
+        description: "Comma-separated list of usernames for site owners."
+        required: false
+        type: string
+      custom_site:
+        description: "Is this a custom site? (Default: false)"
+        required: true
+        default: false
+        type: boolean
+      ticket_number:
+        description: "Service Now ticket number (if any)."
+        required: false
+        type: string
+
+    secrets:
+      PANTHEON_MACHINE_TOKEN:
+        description: "Pantheon machine token."
+        required: true
+      PANTHEON_SSH_KEY:
+        description: "SSH key for Pantheon."
+        required: true
+
+jobs:
+  setup-environment:
+    name: "Set Up Environment"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+      - name: "Authenticate with Terminus"
+        uses: pantheon-systems/terminus-github-actions@release/v1
+        with:
+          pantheon-machine-token: ${{ secrets.PANTHEON_MACHINE_TOKEN }}
+
+  verify-site-name:
+    name: "Verify Site Name Availability"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Check site name availability"
+        run: |
+          if terminus site:info --field name "${{ inputs.pantheon_site_name }}" ; then
+            echo "${{ inputs.pantheon_site_name }} already exists."
+            exit 1
+          else
+            echo "Site name available: ${{ inputs.pantheon_site_name }}"
+          fi
+
+  create-new-site:
+    name: "Create New Site"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Create Pantheon Site"
+        run: |
+          START_TIME="$(date '+%s')"
+          terminus -y -n site:create \
+            --org "${PANTHEON_ORG}" \
+                  "${{ inputs.pantheon_site_name }}" \
+                  "${{ inputs.pantheon_site_name }}" \
+                  "${PANTHEON_UPSTREAM}"
+          terminus -y -n workflow:wait --start "$START_TIME" --max 900 -- "${{ inputs.pantheon_site_name }}.dev"
+          echo "Site created successfully: ${{ inputs.pantheon_site_name }}"
+
+  install-content:
+    name: "Install Starter Content or Drupal"
+    needs: create-new-site
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Install Starter Content"
+        if: ${{ inputs.starter_content }}
+        run: |
+          echo "Installing starter content."
+          STARTER_DB=$(terminus -y -n backup:get --element=db "${STARTER_SITE}.live")
+          STARTER_FILES=$(terminus -y -n backup:get --element=files "${STARTER_SITE}.live")
+          terminus -y -n import:database "${{ inputs.pantheon_site_name }}.dev" "$STARTER_DB"
+          terminus -y -n import:files "${{ inputs.pantheon_site_name }}.dev" "$STARTER_FILES"
+          terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- cache:rebuild
+          echo "Starter content installed."
+      - name: "Install Clean Drupal"
+        if: ${{ inputs.starter_content == false }}
+        run: |
+          echo "Performing a clean Drupal installation."
+          terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- \
+            site:install az_quickstart install_configure_form.enable_update_status_module=NULL \
+            --account-name="azadmin" \
+            --account-mail="noreply@email.arizona.edu" \
+            --site-mail="noreply@email.arizona.edu" \
+            --site-name="${{ inputs.drupal_site_name }}" \
+            --yes \
+            --verbose
+          terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- user:block azadmin
+          terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- cache:rebuild
+          echo "Clean Drupal installation completed."
+
+  add-cws-users:
+    name: "Add CWS Users"
+    needs: install-content
+    if: ${{ inputs.cws_users }}
+    uses: uaz-web/reusable-workflows/.github/workflows/add-cws-users-to-azqs-site.yml@main
+    with:
+      pantheon_site_name: ${{ inputs.pantheon_site_name }}
+      pantheon_environment: "dev"
+    secrets:
+      pantheon_machine_token: ${{ secrets.PANTHEON_MACHINE_TOKEN }}
+      pantheon_ssh_key: ${{ secrets.PANTHEON_SSH_KEY }}
+
+  assign-site-owners:
+    name: "Assign Site Owners"
+    needs: install-content
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Assign site owners"
+        run: |
+          if [ -n "${{ inputs.site_owners }}" ]; then
+            for USER in $(echo "${{ inputs.site_owners }}" | tr ',' ' '); do
+              terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- user:create "${USER}" --mail="${USER}"@arizona.edu
+              terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- cas:set-cas-username "${USER}" "${USER}"
+              terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- user:role:add "az_content_admin" "${USER}"
+              terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- user:role:add "az_content_editor" "${USER}"
+              terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- user:role:add "az_user_admin" "${USER}"
+            done
+          else
+            echo "No site owners provided."
+          fi
+
+  finalize-setup:
+    name: "Finalize Setup"
+    needs: [install-content, add-cws-users, assign-site-owners]
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Tag site with configurations"
+        run: |
+          if [ "${{ inputs.custom_site }}" == "true" ]; then
+            terminus -y -n tag:add "${{ inputs.pantheon_site_name }}" "${PANTHEON_ORG}" "az-site-custom"
+          else
+            terminus -y -n tag:add "${{ inputs.pantheon_site_name }}" "${PANTHEON_ORG}" "az-site-standard"
+          fi
+
+          if [ "${{ inputs.paid_site }}" == "true" ]; then
+            terminus -y -n tag:add "${{ inputs.pantheon_site_name }}" "${PANTHEON_ORG}" "az-site"
+            terminus -y -n tag:add "${{ inputs.pantheon_site_name }}" "${PANTHEON_ORG}" "CWS"
+            terminus plan:set "${{ inputs.pantheon_site_name }}" "${BASIC_PLAN}"
+          else
+            terminus -y -n tag:add "${{ inputs.pantheon_site_name }}" "${PANTHEON_ORG}" "${CWS_TESTING_TAG}"
+            terminus -y -n tag:add "${{ inputs.pantheon_site_name }}" "${PANTHEON_ORG}" "CWS"
+          fi
+      - name: "Clear cache and switch to Git mode"
+        run: |
+          terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- cache:rebuild
+          terminus -y -n connection:set "${{ inputs.pantheon_site_name }}.dev" git
+      - name: "Deploy to Test and Live"
+        run: |
+          terminus -y -n env:deploy -- "${{ inputs.pantheon_site_name }}.test"
+          terminus -y -n drush "${{ inputs.pantheon_site_name }}.test" -- php:eval '\Drupal::service("file.htaccess_writer")->write("public://", FALSE, TRUE);'
+          terminus -y -n env:deploy -- "${{ inputs.pantheon_site_name }}.live"
+          terminus -y -n drush "${{ inputs.pantheon_site_name }}.live" -- php:eval '\Drupal::service("file.htaccess_writer")->write("public://", FALSE, TRUE);'
+      - name: "Clear test and live caches"
+        run: |
+          terminus -y -n drush "${{ inputs.pantheon_site_name }}.test" -- cache:rebuild
+          terminus -y -n drush "${{ inputs.pantheon_site_name }}.live" -- cache:rebuild
