@@ -78,15 +78,24 @@ jobs:
     name: "Create New Site"
     runs-on: ubuntu-latest
     steps:
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+      - name: "Authenticate with Terminus"
+        uses: pantheon-systems/terminus-github-actions@release/v1
+        with:
+          pantheon-machine-token: ${{ secrets.PANTHEON_MACHINE_TOKEN }}
       - name: "Create Pantheon Site"
         run: |
           START_TIME="$(date '+%s')"
           terminus -y -n site:create \
             --org "${PANTHEON_ORG}" \
-                  "${{ inputs.pantheon_site_name }}" \
-                  "${{ inputs.pantheon_site_name }}" \
-                  "${PANTHEON_UPSTREAM}"
+            "${{ inputs.pantheon_site_name }}" \
+            "${{ inputs.pantheon_site_name }}" \
+            "${PANTHEON_UPSTREAM}"
           terminus -y -n workflow:wait --start "$START_TIME" --max 900 -- "${{ inputs.pantheon_site_name }}.dev"
+          sleep 90
           echo "Site created successfully: ${{ inputs.pantheon_site_name }}"
 
   install-content:
@@ -94,10 +103,17 @@ jobs:
     needs: create-new-site
     runs-on: ubuntu-latest
     steps:
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+      - name: "Authenticate with Terminus"
+        uses: pantheon-systems/terminus-github-actions@release/v1
+        with:
+          pantheon-machine-token: ${{ secrets.PANTHEON_MACHINE_TOKEN }}
       - name: "Install Starter Content"
         if: ${{ inputs.starter_content }}
         run: |
-          echo "Installing starter content."
           STARTER_DB=$(terminus -y -n backup:get --element=db "${STARTER_SITE}.live")
           STARTER_FILES=$(terminus -y -n backup:get --element=files "${STARTER_SITE}.live")
           terminus -y -n import:database "${{ inputs.pantheon_site_name }}.dev" "$STARTER_DB"
@@ -107,7 +123,6 @@ jobs:
       - name: "Install Clean Drupal"
         if: ${{ inputs.starter_content == false }}
         run: |
-          echo "Performing a clean Drupal installation."
           terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- \
             site:install az_quickstart install_configure_form.enable_update_status_module=NULL \
             --account-name="azadmin" \
@@ -137,16 +152,24 @@ jobs:
     needs: install-content
     runs-on: ubuntu-latest
     steps:
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+      - name: "Authenticate with Terminus"
+        uses: pantheon-systems/terminus-github-actions@release/v1
+        with:
+          pantheon-machine-token: ${{ secrets.PANTHEON_MACHINE_TOKEN }}
       - name: "Assign site owners"
         run: |
           if [ -n "${{ inputs.site_owners }}" ]; then
             for USER in $(echo "${{ inputs.site_owners }}" | tr ',' ' '); do
               terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- user:create "${USER}" --mail="${USER}"@arizona.edu
               terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- cas:set-cas-username "${USER}" "${USER}"
-              terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- user:role:add "az_content_admin" "${USER}"
-              terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- user:role:add "az_content_editor" "${USER}"
-              terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- user:role:add "az_user_admin" "${USER}"
             done
+            terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- user:role:add "az_content_admin" "${{ inputs.site_owners }}"
+            terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- user:role:add "az_content_editor" "${{ inputs.site_owners }}"
+            terminus -y -n drush "${{ inputs.pantheon_site_name }}.dev" -- user:role:add "az_user_admin" "${{ inputs.site_owners }}"
           else
             echo "No site owners provided."
           fi
@@ -156,6 +179,14 @@ jobs:
     needs: [install-content, add-cws-users, assign-site-owners]
     runs-on: ubuntu-latest
     steps:
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+      - name: "Authenticate with Terminus"
+        uses: pantheon-systems/terminus-github-actions@release/v1
+        with:
+          pantheon-machine-token: ${{ secrets.PANTHEON_MACHINE_TOKEN }}
       - name: "Tag site with configurations"
         run: |
           if [ "${{ inputs.custom_site }}" == "true" ]; then
