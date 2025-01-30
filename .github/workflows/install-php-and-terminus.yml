@@ -1,5 +1,5 @@
 name: 'Install PHP and Terminus'
-on: 
+on:
   workflow_call:
     secrets:
       PANTHEON_MACHINE_TOKEN:

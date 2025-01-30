@@ -24,12 +24,12 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-      
+
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
         php-version: '8.2'
-        
+
     - name: Set up SSH
       run: |
         set -x
@@ -37,12 +37,12 @@ jobs:
         echo -e "Host *.drush.in\n    StrictHostKeyChecking no" > ${HOME}/.ssh/config
         echo -e "${{ secrets.pantheon_ssh_key }}" > ${HOME}/.ssh/id_rsa
         chmod 600 ${HOME}/.ssh/*
-        
+
     - name: Install and authenticate Terminus
       uses: pantheon-systems/terminus-github-actions@release/v1
       with:
         pantheon-machine-token: ${{ secrets.pantheon_machine_token }}
-        
+
     - name: Check if site exists
       run: |
         set -x
@@ -52,7 +52,7 @@ jobs:
           echo "${{ inputs.pantheon_site_name }} does not exist."
           exit 1
         fi
-          
+
     - name: Add administrators
       run: |
         set -x +e
@@ -62,7 +62,7 @@ jobs:
           terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:role:add "administrator" "${USER}" </dev/null
           terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:block "${USER}" </dev/null
         done < site-admins.txt
-        
+
     - name: Add student workers
       run: |
         set -x +e
