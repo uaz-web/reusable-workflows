@@ -71,4 +71,5 @@ jobs:
           terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- cas:set-cas-username "${USER}" "${USER}" </dev/null
           terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:role:add "az_content_editor" "${USER}" </dev/null
           terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:role:add "az_content_admin" "${USER}" </dev/null
+          terminus drush "${{ inputs.pantheon_site_name }}"."${{ inputs.pantheon_environment }}" -- user:block "${USER}" </dev/null
         done < students.txt
